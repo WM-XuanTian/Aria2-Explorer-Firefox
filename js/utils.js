@@ -293,7 +293,7 @@ class Utils {
      * @return {string} OS platform name
      */
     static getPlatform() {
-        return navigator.userAgentData.platform;
+        return navigator.platform;
     }
 }
 

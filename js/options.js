@@ -244,7 +244,8 @@ var Configs =
             tempSet.delete("");
             Configs[textarea.id] = Array.from(tempSet);
         }
-        chrome.storage.local.set(Configs);
+        let { init, reset, save, upload, download, notifySyncResult, ...confs } = Configs;
+        chrome.storage.local.set(confs).catch((e) => { console.error("Cannot store configs. ", e); });
     },
     upload: function () {
         try {
@@ -262,7 +263,8 @@ var Configs =
             if (!confirm(str))
                 return;
         }
-        chrome.storage.sync.set(Configs).then(() => {
+        let { init, reset, save, upload, download, notifySyncResult, ...confs } = Configs;
+        chrome.storage.sync.set(confs).then(() => {
             let str = chrome.i18n.getMessage("uploadConfigSucceed");
             Configs.notifySyncResult(str, "alert-success");
         }).catch(error => {
@@ -390,9 +392,9 @@ function isRpcListChanged(changes) {
 function toggleMagnetHandler(flag) {
     let magnetPage = chrome.runtime.getURL("magnet.html") + "?action=magnet&url=%s";
     if (flag) {
-        navigator.registerProtocolHandler("magnet", magnetPage, "Capture Magnet");
+        // TODO: replace navigator.registerProtocolHandler("magnet", magnetPage, "Capture Magnet");
     } else {
-        navigator.unregisterProtocolHandler("magnet", magnetPage);
+        // TODO: replace navigator.unregisterProtocolHandler("magnet", magnetPage);
     }
 }
 
@@ -460,6 +462,7 @@ function markRpc(event) {
     let rpcIndex = event.delegateTarget.id.split('-')[1];
     if (rpcIndex in Configs.rpcList) {
         Configs.rpcList[rpcIndex].ignoreInsecure = !Configs.rpcList[rpcIndex].ignoreInsecure;
-        chrome.storage.local.set(Configs);
+        let { init, reset, save, upload, download, notifySyncResult, ...confs } = Configs;
+        chrome.storage.local.set(confs);
     }
 }

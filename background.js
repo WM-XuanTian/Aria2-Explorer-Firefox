@@ -20,11 +20,12 @@ var CurrentTabUrl = "about:blank";
 var MonitorId = null;
 var MonitorInterval = INTERVAL_LONG; // Aria2 monitor interval 3000ms
 var RemoteAria2List = [];
+var WeakLock = null;
 
 const IconAnimController = new AnimationController();
 const ContextMenus = new ContextMenu();
 
-const isDownloadListened = () => chrome.downloads.onDeterminingFilename.hasListener(captureDownload);
+const isDownloadListened = () => chrome.downloads.onCreated.hasListener(captureDownload);
 
 /**
  * @typedef RpcItem
@@ -246,12 +247,12 @@ function shouldCapture(downloadItem) {
         }
     }
 
-    return downloadItem.fileSize >= Configs.fileSize * 1024 * 1024
+    return downloadItem.fileSize >= Configs.fileSize * 1024 * 1024 || downloadItem.fileSize < 0;
 }
 
 function enableCapture() {
     if (!isDownloadListened()) {
-        chrome.downloads.onDeterminingFilename.addListener(captureDownload);
+        chrome.downloads.onCreated.addListener(captureDownload);
     }
     IconManager.turnOn();
     Configs.integration = true;
@@ -260,19 +261,18 @@ function enableCapture() {
 
 function disableCapture() {
     if (isDownloadListened()) {
-        chrome.downloads.onDeterminingFilename.removeListener(captureDownload);
+        chrome.downloads.onCreated.removeListener(captureDownload);
     }
     IconManager.turnOff(Configs.iconOffStyle);
     Configs.integration = false;
     ContextMenus.update("MENU_CAPTURE_DOWNLOAD", { checked: false });
 }
 
-async function captureDownload(downloadItem, suggest) {
+async function captureDownload(downloadItem) {
     if (downloadItem.byExtensionId) {
         // TODO: Filename assigned by chrome.downloads.download() was not passed in
         // and will be discarded by Chrome. No solution or workaround right now. The
         // only way is disabling capture before other extensions call chrome.downloads.download().
-        suggest();
         const title = chrome.i18n.getMessage("RemindCaptureTip");
         const message = chrome.i18n.getMessage("RemindCaptureTipDes");
         const requireInteraction = true;
@@ -315,9 +315,9 @@ async function launchUI(info) {
     if (Configs.webUIOpenStyle == "sidePanel") {
         try {
             if (info && 'id' in info) {
-                await chrome.sidePanel.open({ tabId: info.id });
+                await chrome.sidebarAction.open();
             } else {
-                await chrome.sidePanel.open({ windowId: CurrentWindowId });
+                await chrome.sidebarAction.open();
             };
             sidePanelOpened = true;
         } catch {
@@ -353,9 +353,9 @@ async function launchUI(info) {
 
     if (sidePanelOpened) {
         if (info && 'id' in info) {
-            await chrome.sidePanel.setOptions({ tabId: info.id, path: webUiUrl });
+            await chrome.sidebarAction.setPanel({ tabId: info.id, path: webUiUrl });
         } else {
-            await chrome.sidePanel.setOptions({ path: webUiUrl });
+            await chrome.sidebarAction.setPanel({ panel: webUiUrl });
         }
         return;
     }
@@ -381,11 +381,10 @@ async function launchUI(info) {
 }
 
 async function openInWindow(url) {
-    let screen = await chrome.system.display.getInfo()
-    const w = Math.floor(screen[0].workArea.width * 0.75);
-    const h = Math.floor(screen[0].workArea.height * 0.75)
-    const l = Math.floor(screen[0].workArea.width * 0.12);
-    const t = Math.floor(screen[0].workArea.height * 0.12);
+    const w = Math.floor(window.screen.width * 0.75);
+    const h = Math.floor(window.screen.height * 0.75)
+    const l = Math.floor(window.screen.width * 0.12);
+    const t = Math.floor(window.screen.height * 0.12);
 
     chrome.windows.create({
         url: url,
@@ -646,6 +645,21 @@ function updateBlockedSites(tab) {
     chrome.storage.local.set({ blockedSites: Configs.blockedSites });
 }
 
+async function requestKeepAwake() {
+    if (WeakLock != null) return;
+    try {
+        WeakLock = await navigator.wakeLock.request("screen");
+        // TODO: WakeLock.addEventListener("release", () => { ... });
+    } catch (error) {
+        console.error("Cannot keep awake. ", error);
+    }
+}
+
+function releaseKeepAwake() {
+    if (WeakLock == null) return;
+    WeakLock.release().then(() => { WeakLock = null; });
+}
+
 function enableMonitor() {
     if (MonitorId) {
         console.warn("Warn: Monitor has already started.");
@@ -665,9 +679,9 @@ function disableMonitor() {
     Configs.monitorAria2 = false;
     ContextMenus.update("MENU_MONITOR_ARIA2", { checked: false });
     if (Configs.integration && !isDownloadListened()) {
-        chrome.downloads.onDeterminingFilename.addListener(captureDownload);
+        chrome.downloads.onCreated.addListener(captureDownload);
     }
-    chrome.power.releaseKeepAwake();
+    releaseKeepAwake();
 }
 
 async function monitorAria2() {
@@ -691,7 +705,7 @@ async function monitorAria2() {
             uploadSpeed += Number(response.result.uploadSpeed);
             downloadSpeed += Number(response.result.downloadSpeed);
             if (Configs.integration && i == 0 && !isDownloadListened()) {
-                chrome.downloads.onDeterminingFilename.addListener(captureDownload);
+                chrome.downloads.onCreated.addListener(captureDownload);
             }
 
             // Only for default aria2, needs Aria2 enhanced version
@@ -708,7 +722,7 @@ async function monitorAria2() {
                     errorMessage = "Aria2 server is unreachable";
 
                 if (Configs.monitorAria2 && Configs.integration && isDownloadListened()) {
-                    chrome.downloads.onDeterminingFilename.removeListener(captureDownload);
+                    chrome.downloads.onCreated.removeListener(captureDownload);
                 }
             }
         } finally {
@@ -724,16 +738,16 @@ async function monitorAria2() {
             MonitorId = setInterval(monitorAria2, MonitorInterval);
         }
         if (Configs.keepAwake && localConnected > 0)
-            chrome.power.requestKeepAwake("system");
+            requestKeepAwake();
         else
-            chrome.power.releaseKeepAwake();
+            releaseKeepAwake();
     } else if (active == 0) {
         if (MonitorInterval == INTERVAL_SHORT) {
             MonitorInterval = INTERVAL_LONG;
             clearInterval(MonitorId);
             MonitorId = setInterval(monitorAria2, MonitorInterval);
         }
-        chrome.power.releaseKeepAwake();
+        releaseKeepAwake();
         if (waiting > 0) {
             IconAnimController.start('Pause');
         }
@@ -765,7 +779,7 @@ async function monitorAria2() {
         let finishStr = chrome.i18n.getMessage("finish");
         title += `${downloadStr}: ${active}  ${waitStr}: ${waiting}  ${finishStr}: ${stopped}\n${uploadStr}: ${uploadSpeed}  ${downloadStr}: ${downloadSpeed}`;
     } else {
-        if (localConnected == 0) chrome.power.releaseKeepAwake();
+        if (localConnected == 0) releaseKeepAwake();
         bgColor = "#A83030" // red;
         text = 'E';
         if (Configs.monitorAll)
@@ -784,10 +798,10 @@ async function monitorAria2() {
 
 async function resetSidePanel(tabId) {
     if (Configs.webUIOpenStyle == "sidePanel") {
-        let { path } = await chrome.sidePanel.getOptions(tabId ? { tabId } : undefined);
+        let { path } = await chrome.sidebarAction.getPanel(tabId ? { tabId } : undefined);
         const defaultPath = 'ui/ariang/index.html';
         if (!path.endsWith(defaultPath)) {
-            chrome.sidePanel.setOptions(tabId ? { tabId, path: defaultPath } : { path: defaultPath });
+            chrome.sidebarAction.setPanel(tabId ? { tabId: tabId, panel: defaultPath } : { panel: defaultPath });
         }
     }
 }
@@ -945,7 +959,6 @@ function init() {
         });
         url = Configs.captureMagnet ? "https://github.com/alexhua/Aria2-Explore/issues/98" : '';
         chrome.runtime.setUninstallURL(url);
-        chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: Configs.webUIOpenStyle == "sidePanel" });
     });
 }
 
