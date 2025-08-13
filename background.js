@@ -537,7 +537,7 @@ function createContextMenu() {
 }
 
 function onMenuClick(info, tab) {
-    const url = decodeURI(info.linkUrl || info.selectionText);
+    const url = info.linkUrl || info.selectionText;
     const referrer = info.frameUrl || info.pageUrl;
     const filename = '';
     // mock a DownloadItem
@@ -907,8 +907,8 @@ function registerAllListeners() {
                         (window) => { sendResponse({ data: window }) }
                     );
                     return true;
-                case "ALT_KEY_EVENT":
-                    AltKeyPressed = !!message.data.pressed;
+                case "CLICK_EVENT":
+                    AltKeyPressed = message.data.altKeyPressed;
                     break;
             }
         }
@@ -985,7 +985,7 @@ function initRemoteAria2() {
 async function initClickChecker() {
     const CS_ID = 'ALT_CLICK_CHECKER';
     const scripts = await chrome.scripting.getRegisteredContentScripts({ ids: [CS_ID] });
-    if (Configs.checkClick && scripts.length == 0) {
+    if (Configs.integration && Configs.checkClick && scripts.length == 0) {
         chrome.scripting.registerContentScripts([{
             id: CS_ID,
             matches: ['<all_urls>'],
