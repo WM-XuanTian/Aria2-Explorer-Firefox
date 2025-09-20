@@ -252,8 +252,7 @@ var Configs =
             tempSet.delete("");
             Configs[textarea.id] = Array.from(tempSet);
         }
-        let { init, reset, save, upload, download, notifySyncResult, ...confs } = Configs;
-        chrome.storage.local.set(confs).catch((e) => { console.error("Cannot store configs. ", e); });
+        chrome.storage.local.set(JSON.parse(JSON.stringify(Configs))).catch((e) => { console.error("Cannot store configs. ", e); });
     },
     upload: function () {
         try {
@@ -271,8 +270,7 @@ var Configs =
             if (!confirm(str))
                 return;
         }
-        let { init, reset, save, upload, download, notifySyncResult, ...confs } = Configs;
-        chrome.storage.sync.set(confs).then(() => {
+        chrome.storage.sync.set(JSON.parse(JSON.stringify(Configs))).then(() => {
             let str = chrome.i18n.getMessage("uploadConfigSucceed");
             Configs.notifySyncResult(str, "alert-success");
         }).catch(error => {
@@ -567,7 +565,6 @@ function markRpc(event) {
     let rpcIndex = event.delegateTarget.id.split('-')[1];
     if (rpcIndex in Configs.rpcList) {
         Configs.rpcList[rpcIndex].ignoreInsecure = !Configs.rpcList[rpcIndex].ignoreInsecure;
-        let { init, reset, save, upload, download, notifySyncResult, ...confs } = Configs;
-        chrome.storage.local.set(confs);
+        chrome.storage.local.set(JSON.parse(JSON.stringify(Configs)));
     }
 }
