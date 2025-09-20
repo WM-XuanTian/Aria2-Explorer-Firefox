@@ -1,7 +1,7 @@
 {
    "name": "__MSG_appName__",
    "short_name": "A2E",
-   "version": "2.7.1",
+   "version": "2.7.5",
    "manifest_version": 3,
    "browser_specific_settings": {
       "gecko": {
@@ -11,6 +11,7 @@
    },
    "default_locale": "en",
    "description": "__MSG_description__",
+   "homepage_url": "https://aria2e.com",
    "options_page": "options.html",
    "permissions": [
       "cookies",
@@ -41,7 +42,7 @@
       "open_at_install": false
    },
    "content_security_policy": {
-      "extension_pages": "script-src 'self';object-src 'self';"
+      "extension_pages": "script-src 'self';object-src 'self';frame-src 'self' aria2://* https://*.aria2e.com/;"
    },
    "icons": {
       "16": "images/logo16.png",
