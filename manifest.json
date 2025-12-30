@@ -1,7 +1,7 @@
 {
    "name": "__MSG_appName__",
    "short_name": "A2E",
-   "version": "2.7.5",
+   "version": "2.7.6",
    "manifest_version": 3,
    "browser_specific_settings": {
       "gecko": {
